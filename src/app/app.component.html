@@ -1,0 +1,17 @@
+<h1>YNAB Budget Allocator</h1>
+<div class="budget-subdivisions">
+  <label>
+    <mat-radio-group [(ngModel)]="subdivision">
+      <mat-radio-button value="monthly">Monthly</mat-radio-button>
+      <mat-radio-button value="bi-weekly">Bi-Weekly</mat-radio-button>
+      <mat-radio-button value="weekly">Weekly</mat-radio-button>
+    </mat-radio-group>
+    <!-- <app-ynab-budget *ngFor="let budget of budgets" [budget]="budget"></app-ynab-budget> -->
+  </label>
+  <div>
+    Subdivision: {{subdivision}}
+  </div>
+</div>
+<div class='budget-buttons'>
+  <button mat-raised-button color="primary" (click)="getCategories()">Get Budget Categories</button>
+</div>
