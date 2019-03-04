@@ -8,7 +8,6 @@ import { CategoryGroup } from './category-group';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment.prod';
 import { Category } from './category';
-import * as ynab from 'ynab';
 
 const YNAB_BASE_URL = 'https://api.youneedabudget.com/v1';
 
@@ -18,11 +17,9 @@ const YNAB_BASE_URL = 'https://api.youneedabudget.com/v1';
 export class YnabApiService {
 
   private headers: any = {};
-  private ynabAPI;
 
   constructor(private http: HttpClient) {
     this.headers['Authorization'] = `Bearer ${environment.pat}`;
-    this.ynabAPI = new ynab.API(environment.pat);
   }
 
   getBudgets(): Observable<Budget[]> {
