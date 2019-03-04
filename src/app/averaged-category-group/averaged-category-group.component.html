@@ -1,0 +1,8 @@
+<div>
+  <h2>{{categoryGroup.name}}</h2>
+  <mat-list>
+    <mat-list-item *ngFor="let category of categoryGroup.categories">
+      <app-averaged-category [category]="category" [subdivision]="subdivision"></app-averaged-category>
+    </mat-list-item>
+  </mat-list>
+</div>

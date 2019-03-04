@@ -1,0 +1,20 @@
+<span>{{category.name}}</span>
+<span>
+  <mat-form-field>
+    <input matInput disabled="disabled" placeholder="Averaged Budgeted" type="text" [value]="category.monthlyBudgeted | currency"/>
+  </mat-form-field>
+</span>
+<span class='allotment-display' *ngIf="!changingAlloted; else allotmentEdit">
+  <mat-form-field>
+    <input matInput readonly="readonly" placeholder="Current Allotment" [value]="category.currentAllotment | currency" (click)="editAlloted()"/>
+  </mat-form-field>
+  <button mat-raised-button color="primary" *ngIf="budgetValueDirty" (click)="updateCategory()">Update</button>
+</span>
+<ng-template #allotmentEdit>
+  <span class='allotment-edit'>
+    <app-focus-input [value]="category.currentAllotment | currency" [placeholder]="'Current Allotment' + (changingAlloted ? ' (editing)' : '')" 
+      (keyup)="allotedKeydownEvent($event)" (valueChanged)="updateEditedValue($event)"></app-focus-input>
+  </span>
+</ng-template>
+<span>
+</span>

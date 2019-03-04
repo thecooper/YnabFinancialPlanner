@@ -1,10 +1,17 @@
 import { Injectable } from '@angular/core';
 import { YnabApiService } from './ynab-api.service';
-import { flatMap, take, map, filter } from 'rxjs/operators';
-import { Observable, forkJoin } from 'rxjs';
-import { MeanBudget } from './mean-budget';
-import { stringify } from '@angular/compiler/src/util';
+import { flatMap, filter } from 'rxjs/operators';
+import { Observable} from 'rxjs';
 import { Category } from './category';
+import { CategoryGroup } from './category-group';
+import { Budget } from './budget';
+import { AveragedCategoryGroup, AveragedCategory } from './averaged-category';
+
+interface CurrentAndAggregateCategories {
+  currentCategory: Category;
+  categoryList: Category[];
+  budgetId: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -13,98 +20,112 @@ export class CategoryUpdatorService {
 
   constructor(private ynabApi: YnabApiService) { }
 
-  getBudgetsWithAverages(): Observable<MeanBudget> {
-    // tslint:disable-next-line:max-line-length
-    const budgetsWithAverages: Map<string, { category: Category, values: number[] }> = new Map<string, { category: Category, values: number[] }>();
+  getBudgetsWithAverages(): Observable<AveragedCategoryGroup[]> {
+    const categoryGroups: Map<string, CategoryGroup> = new Map<string, CategoryGroup>();
+    const categoryAggregates: Map<string, CurrentAndAggregateCategories> = new Map<string, CurrentAndAggregateCategories>();
 
     return new Observable(observer => {
-      this.getBudgetCategories()
-        // .pipe(map(category => {}));
-        .pipe(filter(category => !category.deleted && !category.hidden))
-        .subscribe(category => {
-          if (!budgetsWithAverages.has(category.id)) {
-            budgetsWithAverages.set(category.id, {
-              category: category,
-              values: []
-            });
-          }
-          budgetsWithAverages.get(category.id).values.push(category.activity / 100);
-        },
-        error => console.error,
-        () => {
-          // const categoryIds = budgetsWithAverages.keys();
-          // console.log(budgetsWithAverages);
-          console.log(budgetsWithAverages.entries());
-          // let currentCategoryId = categoryIds.next();
+      this.getBudgets().subscribe(
+        budget => {
+          this.getBudgetCategories(budget.id)
+            .pipe(filter(category => !category.deleted && !category.hidden))
+            .subscribe(categoryGroup => {
+              categoryGroups.set(categoryGroup.id, categoryGroup);
 
-          // while (!(currentCategoryId = categoryIds.next()).done) {
-          //   console.log(budgetsWithAverages.get(currentCategoryId.value));
-          // }
-
-          budgetsWithAverages.forEach((data: { category: Category, values: number[] }, key: string) => {
-            const averageSpent = data.values.reduce((previousVal, currentVal) => previousVal + currentVal) / data.values.length;
-            const meanBudget = new MeanBudget();
-
-            meanBudget.id = data.category.id;
-            meanBudget.name = data.category.name;
-            meanBudget.averageSpent = averageSpent;
-
-            observer.next(meanBudget);
-          });
-        });
-    });
-  }
-
-  getBudgetCategories(): Observable<Category> {
-    // const budgetsWithAverages: Map<string, MeanBudget> = new Map<string, Map<string, Budget>>();
-
-    const lastMonth = new Date(), monthBeforeLast = new Date();
-
-    lastMonth.setMonth(lastMonth.getMonth() - 1);
-    const lastMonthDate = lastMonth.getMonth() + 1;
-    const lastMonthDateString = lastMonthDate > 9 ? lastMonthDate.toString() : '0' + lastMonthDate.toString();
-    const lastMonthsDateString = `${lastMonth.getFullYear()}-${lastMonthDateString}-01`;
-
-    monthBeforeLast.setMonth(monthBeforeLast.getMonth() - 2);
-    const monthBeforeLastMonth = monthBeforeLast.getMonth() + 1;
-    const monthBeforeLastMonthString = monthBeforeLastMonth > 9 ? monthBeforeLastMonth.toString() : '0' + monthBeforeLastMonth.toString();
-    const monthBeforeLastDateString = `${monthBeforeLast.getFullYear()}-${monthBeforeLastMonthString}-01`;
-
-
-    return new Observable(observer => {
-      this.ynabApi.getBudgets()
-        .pipe(
-          flatMap(budget => budget),
-          take(1)
-        ).subscribe(budget => {
-          this.ynabApi.getCategories(budget.id).subscribe(categoryGroups => {
-            for (const categoryGroup of categoryGroups) {
               for (const category of categoryGroup.categories) {
-                observer.next(category);
+                categoryAggregates.set(category.id, {
+                  currentCategory: category,
+                  categoryList: [ category ],
+                  budgetId: budget.id,
+                });
               }
-            }
+            },
+            error => console.error,
+            () => {
+              this.getPreviousMonthsCategories(budget.id).subscribe(category => {
+                categoryAggregates.get(category.id).categoryList.push(category);
+              },
+              error => console.error,
+              () => {
+                const categoryGroupsOutput: AveragedCategoryGroup[] = [];
 
-            this.ynabApi.getCategoriesByMonth(budget.id, lastMonthsDateString)
-            .subscribe(categories => {
-              for (const category of categories) {
-                observer.next(category);
-              }
+                // Iterate through every Category Group
+                categoryGroups.forEach(categoryGroup => {
+                  // Iterate through every Category
+                  const averagedCategoryGroup = new AveragedCategoryGroup(categoryGroup);
 
-              this.ynabApi.getCategoriesByMonth(budget.id, monthBeforeLastDateString)
-                .subscribe(latestMonthCategories => {
-                  for (const category of latestMonthCategories) {
-                    observer.next(category);
+                  for (const category of categoryGroup.categories) {
+                    const averagedCategory = new AveragedCategory(category);
+                    const currentAndAggregateCategories: CurrentAndAggregateCategories = categoryAggregates.get(category.id);
+                    const aggregates = currentAndAggregateCategories.categoryList.filter(c => c.budgeted > 0);
+
+                    const average = (aggregates
+                      .map(c => c.budgeted)
+                      .reduce((iterator, value) => iterator + value, 0)) / aggregates.length / 1000;
+
+                    averagedCategory.budgetId = currentAndAggregateCategories.budgetId;
+                    averagedCategory.currentBudgeted = currentAndAggregateCategories.currentCategory.budgeted;
+                    averagedCategory.monthlyBudgeted = average > 0 ? average : 0;
+                    averagedCategoryGroup.categories.push(averagedCategory);
                   }
 
-                  observer.complete();
+                  categoryGroupsOutput.push(averagedCategoryGroup);
+                });
+                observer.next(categoryGroupsOutput);
               });
             });
-          });
-        });
+        }
+      );
     });
   }
 
-  updateBudgets() {
+  getBudgets(): Observable<Budget> {
+    return this.ynabApi.getBudgets()
+      .pipe(flatMap(budget => budget));
+  }
 
+  getBudgetCategories(budgetId): Observable<CategoryGroup> {
+    return this.ynabApi.getCategories(budgetId)
+      .pipe(flatMap(categoryGroup => categoryGroup));
+  }
+
+  getPreviousMonthsCategories(budgetId: string): Observable<Category> {
+    const lastMonthsDateString = this.generateMonthString(1),
+          monthBeforeLastDateString = this.generateMonthString(2);
+
+    return new Observable(observer => {
+      this.ynabApi.getCategoriesByMonth(budgetId, lastMonthsDateString)
+              .subscribe(categories => {
+                for (const category of categories) {
+                  observer.next(category);
+                }
+
+                this.ynabApi.getCategoriesByMonth(budgetId, monthBeforeLastDateString)
+                  .subscribe(latestMonthCategories => {
+                    for (const category of latestMonthCategories) {
+                      observer.next(category);
+                    }
+
+                    observer.complete();
+                });
+              });
+    });
+
+  }
+
+  private generateMonthString(monthsAgo: number): string {
+    const month = new Date();
+
+    month.setMonth(month.getMonth() - monthsAgo);
+    const monthDate = month.getMonth() + 1;
+    const monthDateString = monthDate > 9 ? monthDate.toString() : '0' + monthDate.toString();
+    return `${month.getFullYear()}-${monthDateString}-01`;
+  }
+
+
+  updateCategoryByMonth(budgetId: string, categoryId: string, budgetAmount: string): Observable<void> {
+    const currenMonth = this.generateMonthString(0);
+
+    return this.ynabApi.updateCategoryByMonth(budgetId, currenMonth, categoryId, budgetAmount);
   }
 }

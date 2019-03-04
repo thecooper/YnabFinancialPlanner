@@ -5,13 +5,12 @@
       <mat-radio-button value="monthly">Monthly</mat-radio-button>
       <mat-radio-button value="bi-weekly">Bi-Weekly</mat-radio-button>
       <mat-radio-button value="weekly">Weekly</mat-radio-button>
+      <mat-radio-button value="bi-monthly">Bi-Monthly</mat-radio-button>
     </mat-radio-group>
-    <!-- <app-ynab-budget *ngFor="let budget of budgets" [budget]="budget"></app-ynab-budget> -->
   </label>
-  <div>
-    Subdivision: {{subdivision}}
-  </div>
 </div>
 <div class='budget-buttons'>
   <button mat-raised-button color="primary" (click)="getCategories()">Get Budget Categories</button>
+  <button mat-raised-button color="primary">Update Categories</button>
 </div>
+<app-averaged-category-group *ngFor="let averagedCategoryGroup of averagedCategoryGroups$ | async" [categoryGroup]="averagedCategoryGroup" [subdivision]="subdivision"></app-averaged-category-group>

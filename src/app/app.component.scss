@@ -6,4 +6,8 @@ $gutter-spacing: 24px;
 
 .budget-buttons {
   margin-top: $gutter-spacing;
+  
+  > * {
+    margin-right: $gutter-spacing;
+  }
 }
